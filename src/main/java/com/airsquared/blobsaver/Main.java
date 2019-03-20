@@ -45,7 +45,7 @@ public class Main {
      * replaces the question mark help labels with activating a breakpoint instead.
      * Remember to add a breakpoint in the correct methods to use this.
      */
-    static final boolean SHOW_BREAKPOINT = false;
+    static final boolean SHOW_BREAKPOINT = true;
 
     public static void main(String[] args) {
         try {
