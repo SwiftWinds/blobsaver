@@ -29,6 +29,9 @@ sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
+    maven {
+        url  "https://jetbrains.bintray.com/pty4j"
+    }
 }
 
 dependencies {
@@ -37,6 +40,8 @@ dependencies {
     compile group: 'it.sauronsoftware', name: 'junique', version: '1.0.4'
     compile "de.codecentric.centerdevice:centerdevice-nsmenufx:2.1.6"
     compile 'net.java.dev.jna:jna:5.2.0'
+
+    implementation 'org.jetbrains.pty4j:pty4j:0.8.6'
 
     testCompile 'junit:junit:4.12'
 }

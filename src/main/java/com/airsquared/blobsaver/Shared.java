@@ -18,6 +18,8 @@
 
 package com.airsquared.blobsaver;
 
+import com.pty4j.PtyProcess;
+import com.pty4j.PtyProcessBuilder;
 import com.sun.javafx.PlatformUtil;
 import javafx.application.Platform;
 import javafx.concurrent.Service;
@@ -44,6 +46,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -73,6 +76,9 @@ class Shared {
     // to remove weird symbols from tsscheckerLog output
     // Otherwise, pasting the output in some applications (like Sublime Text) won't work
     public static final String NON_PRINTABLE_NON_WHITESPACE = "[^\\p{Print}\n\r]+";
+
+    // to setup terminal emulator for PtyProcessBuilder
+    private static final Map<String, String> XTERM_ENV = Collections.singletonMap("TERM", "xterm");
 
     static String textToIdentifier(String deviceModel) {
         String toReturn = Devices.getDeviceModelIdentifiersMap().getOrDefault(deviceModel, "");
@@ -338,20 +344,58 @@ class Shared {
     }
 
     static String executeProgram(String... command) throws IOException {
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        StringBuilder tsscheckerOutput = new StringBuilder();
+        PtyProcessBuilder tsscheckerProcessBuilder = new PtyProcessBuilder(command).setEnvironment(XTERM_ENV)
+                .setRedirectErrorStream(true);
+        PtyProcess tsscheckerProcess = tsscheckerProcessBuilder.start();
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(tsscheckerProcess.getInputStream(), StandardCharsets.UTF_8));
+        String sysStr;
         try {
-            process.waitFor();
-        } catch (InterruptedException e) {
+            while ((sysStr = in.readLine()) != null) {
+                tsscheckerOutput.append(sysStr).append('\n'); //Pty doesn't add \n at the ends of lines
+                System.out.println(sysStr);
+//                while (in.ready()) {
+//                    tsscheckerOutput.append(sysStr = in.readLine());
+//                    System.out.println(sysStr);
+//                }
+            }
+        } catch (IOException e) {
+            System.err.println("ERROR: encountered IO exception while reading tsschecker output");
             e.printStackTrace();
         }
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            StringBuilder logBuilder = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                logBuilder.append(line).append("\n");
-            }
-            return logBuilder.toString();
+        try {
+            tsscheckerProcess.waitFor();
+        } catch (InterruptedException e) {
+            System.err.println("ERROR: interrupted while waiting for tsschecker to finish executing");
+            e.printStackTrace();
         }
+//        PtyProcess tsscheckerProcess = PtyProcess.exec(command);
+//        test.waitFor();
+//        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+//        BufferedReader in = new BufferedReader(
+//                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+//        StringBuilder logBuilder = new StringBuilder();
+//        String sysStr;
+//        try {
+//            while ((sysStr = in.readLine()) != null) {
+//                logBuilder.append(sysStr);
+//                System.out.println(sysStr);
+//                while (in.ready()) {
+//                    logBuilder.append(sysStr = in.readLine());
+//                    System.out.println(sysStr);
+//                }
+//            }
+//        } catch (IOException e) {
+//            System.err.println("ERROR: worker thread encountered IO exception while reading tsschecker output");
+//            e.printStackTrace();
+//        }
+//        try {
+//            process.waitFor();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+        return tsscheckerOutput.toString();
     }
 
     static String getJarLocation() {
