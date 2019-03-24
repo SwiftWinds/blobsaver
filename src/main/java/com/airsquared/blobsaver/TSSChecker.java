@@ -41,6 +41,9 @@ import static com.airsquared.blobsaver.Shared.*;
 class TSSChecker {
 
     static void run(String device) {
+        if (device == null) { // the error should be shown by now; no need to show it again
+            return;
+        }
         Controller controller = Controller.INSTANCE;
         if (controller.versionCheckBox.isSelected()) {
             List<String> signedVersions;
