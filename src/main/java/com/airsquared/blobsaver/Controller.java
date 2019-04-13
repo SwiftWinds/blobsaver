@@ -23,10 +23,23 @@ import com.sun.javafx.scene.control.skin.LabeledText;
 import de.codecentric.centerdevice.MenuToolkit;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
@@ -35,6 +48,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
+import org.controlsfx.dialog.ProgressDialog;
 import org.json.JSONArray;
 
 import java.awt.Desktop;
@@ -49,7 +63,18 @@ import java.util.prefs.Preferences;
 import static com.airsquared.blobsaver.Main.appPrefs;
 import static com.airsquared.blobsaver.Main.appVersion;
 import static com.airsquared.blobsaver.Main.primaryStage;
-import static com.airsquared.blobsaver.Shared.*;
+import static com.airsquared.blobsaver.Shared.checkForUpdates;
+import static com.airsquared.blobsaver.Shared.copyStreamToFile;
+import static com.airsquared.blobsaver.Shared.getJarLocation;
+import static com.airsquared.blobsaver.Shared.githubIssue;
+import static com.airsquared.blobsaver.Shared.isNullOrEmpty;
+import static com.airsquared.blobsaver.Shared.newReportableError;
+import static com.airsquared.blobsaver.Shared.newUnreportableError;
+import static com.airsquared.blobsaver.Shared.openURL;
+import static com.airsquared.blobsaver.Shared.redditPM;
+import static com.airsquared.blobsaver.Shared.reportError;
+import static com.airsquared.blobsaver.Shared.resizeAlertButtons;
+import static com.airsquared.blobsaver.Shared.textToIdentifier;
 
 public class Controller {
 
@@ -915,11 +940,11 @@ public class Controller {
     @SuppressWarnings("Duplicates")
     public void goButtonHandler() {
         boolean doReturn = false;
-        if (!identifierCheckBox.isSelected() && "".equals(deviceTypeChoiceBox.getValue())) {
+        if (!identifierCheckBox.isSelected() && isNullOrEmpty((String) deviceTypeChoiceBox.getValue())) {
             deviceTypeChoiceBox.setEffect(errorBorder);
             doReturn = true;
         }
-        if (!identifierCheckBox.isSelected() && "".equals(deviceModelChoiceBox.getValue())) {
+        if (!identifierCheckBox.isSelected() && isNullOrEmpty((String) deviceModelChoiceBox.getValue())) {
             deviceModelChoiceBox.setEffect(errorBorder);
             doReturn = true;
         }
@@ -935,12 +960,16 @@ public class Controller {
             return;
         }
         String deviceModel = (String) deviceModelChoiceBox.getValue();
-        if ("".equals(deviceModel)) {
+        Task tsscheckerTask = null;
+        ProgressDialog tsscheckerProgressDialog;
+        if (isNullOrEmpty(deviceModel)) { // if user manually specifying identifier
             String identifierText = identifierField.getText();
             try {
                 if (identifierText.startsWith("iPad") || identifierText.startsWith("iPod") || identifierText.startsWith("iPhone") || identifierText.startsWith("AppleTV")) {
-                    TSSChecker.run(identifierField.getText());
+                    // use manually specified identifier
+                    tsscheckerTask = new TSSCheckerTask(identifierText);
                 } else {
+                    // manually specified identifier is not valid
                     identifierField.setEffect(errorBorder);
                     newUnreportableError("\"" + identifierText + "\" is not a valid identifier");
                 }
@@ -948,7 +977,21 @@ public class Controller {
                 newUnreportableError("\"" + identifierText + "\" is not a valid identifier");
             }
         } else {
-            TSSChecker.run(textToIdentifier(deviceModel));
+            // automatically generate identifier from dropdown menu
+            tsscheckerTask = new TSSCheckerTask(textToIdentifier(deviceModel));
+        }
+        if (tsscheckerTask != null) { // if there was no error and tsscheckerTask was assigned
+            new Thread(tsscheckerTask).start();
+            tsscheckerProgressDialog = new TSSCheckerProgressDialog(tsscheckerTask);
+            tsscheckerProgressDialog.showAndWait();
+            tsscheckerTask.setOnFailed(e -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR,
+                        "Saving blobs failed. Check your internet connection.\n\nIf your internet is working and you can connect to the website ipsw.me in your browser, please create a new issue on Github or PM me on Reddit. The log has been copied to your clipboard.",
+                        githubIssue, redditPM, ButtonType.OK);
+                resizeAlertButtons(alert);
+                alert.showAndWait();
+                reportError(alert, tsscheckerTask.getException().getMessage());
+            });
         }
     }
 

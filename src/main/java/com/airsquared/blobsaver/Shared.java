@@ -18,8 +18,6 @@
 
 package com.airsquared.blobsaver;
 
-import com.pty4j.PtyProcess;
-import com.pty4j.PtyProcessBuilder;
 import com.sun.javafx.PlatformUtil;
 import javafx.application.Platform;
 import javafx.concurrent.Service;
@@ -46,7 +44,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -73,17 +70,10 @@ class Shared {
     static ButtonType redditPM = new ButtonType("PM on Reddit");
     static ButtonType githubIssue = new ButtonType("Create Issue on Github");
 
-    // to remove weird symbols from tsscheckerLog output
-    // Otherwise, pasting the output in some applications (like Sublime Text) won't work
-    public static final String NON_PRINTABLE_NON_WHITESPACE = "[^\\p{Print}\n\r]+";
-
-    // to setup terminal emulator for PtyProcessBuilder
-    private static final Map<String, String> XTERM_ENV = Collections.singletonMap("TERM", "xterm");
-
     static String textToIdentifier(String deviceModel) {
         String toReturn = Devices.getDeviceModelIdentifiersMap().getOrDefault(deviceModel, "");
         if ("".equals(toReturn)) { // this will never happen in background
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Could not find: \"" + deviceModel + "\"" + "\n\nPlease create a new issue on Github or PM me on Reddit.", new ButtonType("Create Issue on Github"), new ButtonType("PM on Reddit"), ButtonType.CANCEL);
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Could not find identifier: \"" + deviceModel + "\"" + "\n\nPlease create a new issue on Github or PM me on Reddit.", new ButtonType("Create Issue on Github"), new ButtonType("PM on Reddit"), ButtonType.CANCEL);
             resizeAlertButtons(alert);
             alert.showAndWait();
             if (alert.getResult().equals(new ButtonType("Create Issue on Github"))) {
@@ -170,29 +160,33 @@ class Shared {
         return response.toString();
     }
 
-    static File getTsschecker() throws IOException {
-        File executablesFolder = getExecutablesFolder();
-        File tsschecker = new File(executablesFolder, "tsschecker");
-        if (tsschecker.exists() && appPrefs.getBoolean("tsschecker last update v2.2.3", false)) {
-            return tsschecker;
-        } else {
-            if (tsschecker.exists()) {
-                tsschecker.delete();
-            }
-            InputStream input;
-            if (PlatformUtil.isMac()) {
-                input = Shared.class.getResourceAsStream("tsschecker_macos");
-            } else if (PlatformUtil.isWindows()) {
-                input = Shared.class.getResourceAsStream("tsschecker_windows.exe");
+    static File getTSSChecker() {
+        try {
+            File executablesFolder = getExecutablesFolder();
+            File tsschecker = new File(executablesFolder, "tsschecker");
+            if (tsschecker.exists() && appPrefs.getBoolean("tsschecker last update v2.2.3", false)) {
+                return tsschecker;
             } else {
-                input = Shared.class.getResourceAsStream("tsschecker_linux");
+                if (tsschecker.exists()) {
+                    tsschecker.delete();
+                }
+                InputStream input;
+                if (PlatformUtil.isMac()) {
+                    input = Shared.class.getResourceAsStream("tsschecker_macos");
+                } else if (PlatformUtil.isWindows()) {
+                    input = Shared.class.getResourceAsStream("tsschecker_windows.exe");
+                } else {
+                    input = Shared.class.getResourceAsStream("tsschecker_linux");
+                }
+                tsschecker.createNewFile();
+                copyStreamToFile(input, tsschecker);
+                tsschecker.setReadable(true, false);
+                tsschecker.setExecutable(true, false);
+                appPrefs.putBoolean("tsschecker last update v2.2.3", true);
+                return tsschecker;
             }
-            tsschecker.createNewFile();
-            copyStreamToFile(input, tsschecker);
-            tsschecker.setReadable(true, false);
-            tsschecker.setExecutable(true, false);
-            appPrefs.putBoolean("tsschecker last update v2.2.3", true);
-            return tsschecker;
+        } catch (IOException e) {
+            throw new TSSCheckerException("There was an error creating TSSChecker.", e, true);
         }
     }
 
@@ -343,61 +337,6 @@ class Shared {
         }
     }
 
-    static String executeProgram(String... command) throws IOException {
-        StringBuilder tsscheckerOutput = new StringBuilder();
-        PtyProcessBuilder tsscheckerProcessBuilder = new PtyProcessBuilder(command).setEnvironment(XTERM_ENV)
-                .setRedirectErrorStream(true);
-        PtyProcess tsscheckerProcess = tsscheckerProcessBuilder.start();
-        BufferedReader in = new BufferedReader(
-                new InputStreamReader(tsscheckerProcess.getInputStream(), StandardCharsets.UTF_8));
-        String sysStr;
-        try {
-            while ((sysStr = in.readLine()) != null) {
-                tsscheckerOutput.append(sysStr).append('\n'); //Pty doesn't add \n at the ends of lines
-                System.out.println(sysStr);
-//                while (in.ready()) {
-//                    tsscheckerOutput.append(sysStr = in.readLine());
-//                    System.out.println(sysStr);
-//                }
-            }
-        } catch (IOException e) {
-            System.err.println("ERROR: encountered IO exception while reading tsschecker output");
-            e.printStackTrace();
-        }
-        try {
-            tsscheckerProcess.waitFor();
-        } catch (InterruptedException e) {
-            System.err.println("ERROR: interrupted while waiting for tsschecker to finish executing");
-            e.printStackTrace();
-        }
-//        PtyProcess tsscheckerProcess = PtyProcess.exec(command);
-//        test.waitFor();
-//        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-//        BufferedReader in = new BufferedReader(
-//                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
-//        StringBuilder logBuilder = new StringBuilder();
-//        String sysStr;
-//        try {
-//            while ((sysStr = in.readLine()) != null) {
-//                logBuilder.append(sysStr);
-//                System.out.println(sysStr);
-//                while (in.ready()) {
-//                    logBuilder.append(sysStr = in.readLine());
-//                    System.out.println(sysStr);
-//                }
-//            }
-//        } catch (IOException e) {
-//            System.err.println("ERROR: worker thread encountered IO exception while reading tsschecker output");
-//            e.printStackTrace();
-//        }
-//        try {
-//            process.waitFor();
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
-        return tsscheckerOutput.toString();
-    }
-
     static String getJarLocation() {
         final String url = Shared.class.getResource("Shared.class").toString();
         String path = url.substring(0, url.length() - "com/airsquared/blobsaver/Controller.class".length());
@@ -419,9 +358,13 @@ class Shared {
     }
 
     static void reportError(Alert alert, String toCopy) {
-        StringSelection stringSelection = new StringSelection(toCopy);
-        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+        copyToClipboard(toCopy);
         reportError(alert);
+    }
+
+    private static void copyToClipboard(String str) {
+        StringSelection stringSelection = new StringSelection(str);
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
     }
 
     static void newReportableError(String msg) {
@@ -431,9 +374,11 @@ class Shared {
     }
 
     static void newReportableError(String msg, String toCopy) {
+        copyToClipboard(toCopy);
         Alert alert = new Alert(Alert.AlertType.ERROR, msg + "\n\nPlease create a new issue on Github or PM me on Reddit. The log has been copied to your clipboard.", githubIssue, redditPM, ButtonType.CANCEL);
         alert.showAndWait();
-        reportError(alert, toCopy);
+        reportError(alert);
+//        reportError(alert, toCopy); // why do you want to do this after the alert? Otherwise, it won't copy to the clipboard until after the alert is dismissed
     }
 
     static void newUnreportableError(String msg) {
@@ -460,6 +405,11 @@ class Shared {
         JSONArray firmwareListJson = new JSONObject(response).getJSONArray("firmwares");
         @SuppressWarnings("unchecked") List<Map<String, Object>> firmwareList = (List) firmwareListJson.toList();
         return firmwareList.stream().filter(map -> Boolean.TRUE.equals(map.get("signed"))).map(map -> map.get("version").toString()).collect(Collectors.toList());
+    }
+
+    // temporary until ProGuard is implemented
+    static boolean isNullOrEmpty(String str) {
+        return str == null || str.isEmpty();
     }
 
     // temporary until ProGuard is implemented

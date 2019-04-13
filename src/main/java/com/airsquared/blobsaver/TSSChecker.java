@@ -22,6 +22,8 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.effect.Effect;
 
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -32,13 +34,24 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static com.airsquared.blobsaver.Shared.*;
+import static com.airsquared.blobsaver.Shared.containsIgnoreCase;
+import static com.airsquared.blobsaver.Shared.copyStreamToFile;
+import static com.airsquared.blobsaver.Shared.getAllSignedVersions;
+import static com.airsquared.blobsaver.Shared.getTSSChecker;
+import static com.airsquared.blobsaver.Shared.githubIssue;
+import static com.airsquared.blobsaver.Shared.newReportableError;
+import static com.airsquared.blobsaver.Shared.newUnreportableError;
+import static com.airsquared.blobsaver.Shared.redditPM;
+import static com.airsquared.blobsaver.Shared.reportError;
+import static com.airsquared.blobsaver.Shared.resizeAlertButtons;
 
 /**
  * For executing the tsschecker program(currently only used in {@link Controller}).
  * TODO: fix this class to separate GUI logic
  */
 class TSSChecker {
+
+    public static int amtOfSignedVersions; //used to determine how many times to divide the original percentage
 
     static void run(String device) {
         if (device == null) { // the error should be shown by now; no need to show it again
@@ -67,13 +80,18 @@ class TSSChecker {
                 return; // the error alert should already be shown
             }
             String signedVersionsString = signedVersions.toString().substring(1, signedVersions.toString().length() - 1);
-            Alert alert = new Alert(Alert.AlertType.INFORMATION, "Successfully saved blobs in\n" + controller.pathField.getText()
-                    + "\n\nFor versions " + signedVersionsString, ButtonType.OK);
+            Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                    "Successfully saved blobs in\n" + controller.pathField.getText()
+                            + "\n\nFor " + (signedVersions.size() == 1 ? "version " : "versions ") + signedVersionsString,
+                    ButtonType.OK);
             alert.setHeaderText("Success!");
             alert.showAndWait();
         } else {
             try {
-                run(device, controller.versionField.getText());
+                amtOfSignedVersions = 1;
+                System.out.println("amtOfSignedVersions set to " + amtOfSignedVersions);
+
+
             } catch (TSSCheckerException e) {
                 // the error alert should already be shown
             }
@@ -99,7 +117,7 @@ class TSSChecker {
         File buildManifestPlist = null;
 
         try {
-            tsschecker = getTsschecker();
+            tsschecker = getTSSChecker();
         } catch (IOException e) {
             newReportableError("There was an error creating tsschecker.", e.getMessage());
             return;
@@ -154,6 +172,10 @@ class TSSChecker {
             System.out.println("Running: " + args.toString());
             tsscheckerLog = executeProgram(args.toArray(new String[0]))
                     .replaceAll(NON_PRINTABLE_NON_WHITESPACE, "");
+            if (Main.SHOW_BREAKPOINT) { //temporary until progress bar done
+                StringSelection stringSelection = new StringSelection(tsscheckerLog);
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+            }
         } catch (IOException e) {
             newReportableError("There was an error starting tsschecker.", e.toString());
             e.printStackTrace();
@@ -165,7 +187,7 @@ class TSSChecker {
             // if multiple versions are being saved at the same time, do not show success message multiple times
             // the success message will be shown after saving everything is completed
             if (!controller.versionCheckBox.isSelected()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Successfully saved blobs for version" + version + " in\n" + savePath, ButtonType.OK);
+                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Successfully saved blobs for version " + version + " in\n" + savePath, ButtonType.OK);
                 alert.setHeaderText("Success!");
                 alert.showAndWait();
             }
@@ -246,84 +268,5 @@ class TSSChecker {
         }
     }
 
-    /**
-     * RuntimeException for all tsschecker related errors.
-     */
-    @SuppressWarnings({"unused", "WeakerAccess"})
-    static class TSSCheckerException extends RuntimeException {
 
-        /**
-         * Constructs a new tsschecker exception with {@code null} as its
-         * detail message.  The cause is not initialized, and may subsequently be
-         * initialized by a call to {@link #initCause}.
-         */
-        public TSSCheckerException() {
-            super();
-        }
-
-        /**
-         * Constructs a new tsschecker exception with the specified detail message.
-         * The cause is not initialized, and may subsequently be initialized by a
-         * call to {@link #initCause}.
-         *
-         * @param message the detail message. The detail message is saved for
-         *                later retrieval by the {@link #getMessage()} method.
-         */
-        public TSSCheckerException(String message) {
-            super(message);
-        }
-
-        /**
-         * Constructs a new tsschecker exception with the specified detail message and
-         * cause.  <p>Note that the detail message associated with
-         * {@code cause} is <i>not</i> automatically incorporated in
-         * this runtime exception's detail message.
-         *
-         * @param message the detail message (which is saved for later retrieval
-         *                by the {@link #getMessage()} method).
-         * @param cause   the cause (which is saved for later retrieval by the
-         *                {@link #getCause()} method).  (A <tt>null</tt> value is
-         *                permitted, and indicates that the cause is nonexistent or
-         *                unknown.)
-         */
-        public TSSCheckerException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
-        /**
-         * Constructs a new tsschecker exception with the specified cause and a
-         * detail message of <tt>(cause==null ? null : cause.toString())</tt>
-         * (which typically contains the class and detail message of
-         * <tt>cause</tt>).  This constructor is useful for runtime exceptions
-         * that are little more than wrappers for other throwables.
-         *
-         * @param cause the cause (which is saved for later retrieval by the
-         *              {@link #getCause()} method).  (A <tt>null</tt> value is
-         *              permitted, and indicates that the cause is nonexistent or
-         *              unknown.)
-         */
-        public TSSCheckerException(Throwable cause) {
-            super(cause);
-        }
-
-        /**
-         * Constructs a new tsschechker exception with the specified detail
-         * message, cause, suppression enabled or disabled, and writable
-         * stack trace enabled or disabled.
-         *
-         * @param message            the detail message.
-         * @param cause              the cause.  (A {@code null} value is permitted,
-         *                           and indicates that the cause is nonexistent or unknown.)
-         * @param enableSuppression  whether or not suppression is enabled
-         *                           or disabled
-         * @param writableStackTrace whether or not the stack trace should
-         *                           be writable
-         */
-        protected TSSCheckerException(String message, Throwable cause,
-                                      boolean enableSuppression,
-                                      boolean writableStackTrace) {
-            super(message, cause, enableSuppression, writableStackTrace);
-        }
-
-    }
 }

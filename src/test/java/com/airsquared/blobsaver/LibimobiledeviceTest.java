@@ -22,7 +22,13 @@ import com.sun.jna.Pointer;
 import com.sun.jna.ptr.PointerByReference;
 import org.junit.Test;
 
-import static com.airsquared.blobsaver.Libimobiledevice.*;
+import static com.airsquared.blobsaver.Libimobiledevice.PlistType;
+import static com.airsquared.blobsaver.Libimobiledevice.getKeyFromConnectedDevice;
+import static com.airsquared.blobsaver.Libimobiledevice.idevice_new;
+import static com.airsquared.blobsaver.Libimobiledevice.lockdownd_client_new;
+import static com.airsquared.blobsaver.Libimobiledevice.lockdownd_get_value;
+import static com.airsquared.blobsaver.Libimobiledevice.lockdownd_pair;
+import static com.airsquared.blobsaver.Libimobiledevice.plist_to_xml;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 

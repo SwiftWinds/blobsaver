@@ -33,7 +33,9 @@ import java.awt.Image;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
 import java.awt.SystemTray;
+import java.awt.Toolkit;
 import java.awt.TrayIcon;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +49,18 @@ import java.util.prefs.Preferences;
 
 import static com.airsquared.blobsaver.Main.appPrefs;
 import static com.airsquared.blobsaver.Main.appVersion;
-import static com.airsquared.blobsaver.Shared.*;
+import static com.airsquared.blobsaver.Shared.NON_PRINTABLE_NON_WHITESPACE;
+import static com.airsquared.blobsaver.Shared.checkForUpdates;
+import static com.airsquared.blobsaver.Shared.containsIgnoreCase;
+import static com.airsquared.blobsaver.Shared.executeProgram;
+import static com.airsquared.blobsaver.Shared.getAllSignedVersions;
+import static com.airsquared.blobsaver.Shared.getTSSChecker;
+import static com.airsquared.blobsaver.Shared.githubIssue;
+import static com.airsquared.blobsaver.Shared.redditPM;
+import static com.airsquared.blobsaver.Shared.reportError;
+import static com.airsquared.blobsaver.Shared.resizeAlertButtons;
+import static com.airsquared.blobsaver.Shared.textToIdentifier;
+import static com.airsquared.blobsaver.TSSChecker.amtOfSignedVersions;
 
 class Background {
 
@@ -200,6 +213,10 @@ class Background {
             return;
         }
         log("signed versions:" + signedVersions);
+
+        amtOfSignedVersions = signedVersions.size();
+        System.out.println("amtOfSignedVersions set to " + amtOfSignedVersions);
+
         String ecid = presetPrefs.get("ECID", "");
         String path = presetPrefs.get("Path", "");
         String boardConfig = presetPrefs.get("Board Config", "");
@@ -207,7 +224,7 @@ class Background {
         for (String version : signedVersions) {
             File tsschecker;
             try {
-                tsschecker = getTsschecker();
+                tsschecker = getTSSChecker();
             } catch (IOException e) {
                 Notification notification = new Notification("Saving blobs failed", "There was an error creating tsschecker. Click here to report this error.", Notification.ERROR_ICON);
                 Notification.Notifier.INSTANCE.setPopupLifetime(Duration.minutes(1));
@@ -240,7 +257,11 @@ class Background {
                     Collections.addAll(args, "--apnonce", apnonce);
                 }
                 tsscheckerLog = executeProgram(args.toArray(new String[0]))
-                        .replace(NON_PRINTABLE_NON_WHITESPACE, "");
+                        .replaceAll(NON_PRINTABLE_NON_WHITESPACE, "");
+                if (Main.SHOW_BREAKPOINT) { //temporary until progress bar done
+                    StringSelection stringSelection = new StringSelection(tsscheckerLog);
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+                }
             } catch (IOException e) {
                 Notification notification = new Notification("Saving blobs failed", "There was an error starting tsschecker. Click here to report this error.", Notification.ERROR_ICON);
                 Notification.Notifier.INSTANCE.setPopupLifetime(Duration.minutes(1));
