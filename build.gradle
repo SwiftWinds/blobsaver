@@ -42,6 +42,10 @@ dependencies {
     compile 'net.java.dev.jna:jna:5.2.0'
 
     implementation 'org.jetbrains.pty4j:pty4j:0.8.6'
+    
+    // https://mvnrepository.com/artifact/org.controlsfx/controlsfx
+    implementation group: 'org.controlsfx', name: 'controlsfx', version: '8.40.14'
+
 
     testCompile 'junit:junit:4.12'
 }
